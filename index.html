@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Evolution</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Fredoka One', cursive;
+            background-color: #1a1a2e;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+        .hidden {
+            display: none !important;
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes pulseAlert {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+        .stage-alert {
+            animation: pulseAlert 2s ease-out forwards;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+
+        .shop-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .shop-scroll::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+        }
+        .shop-scroll::-webkit-scrollbar-thumb {
+            background: #fcd34d;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="hud" class="ui-layer hidden">
+        <div class="absolute top-6 left-6 text-white text-5xl font-extrabold drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] z-10" id="scoreDisplay">0</div>
+        <div class="absolute top-6 right-6 flex items-center glass-panel rounded-full px-4 py-2 border-2 border-yellow-400 z-10 shadow-lg">
+            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-2 border-yellow-100 mr-3 flex items-center justify-center shadow-[0_0_15px_rgba(250,204,21,0.6)]">
+                <span class="text-sm text-yellow-900 font-extrabold">$</span>
+            </div>
+            <span class="text-yellow-400 text-3xl font-bold drop-shadow-md" id="coinDisplay">0</span>
+        </div>
+        <div id="stageAlertContainer" class="absolute inset-0 flex items-center justify-center pointer-events-none hidden">
+            <h2 id="stageAlertText" class="text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-300 to-purple-400 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] text-center tracking-widest">STAGE 2</h2>
+        </div>
+    </div>
+
+    <div id="mainMenu" class="ui-layer interactive glass-panel flex flex-col justify-center items-center">
+        <h1 class="text-6xl md:text-8xl text-white mb-2 floating drop-shadow-[0_8px_8px_rgba(0,0,0,0.8)] text-center leading-tight font-extrabold tracking-wider">
+            FLAPPY<br><span class="text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 text-5xl md:text-7xl drop-shadow-sm">EVOLUTION</span>
+        </h1>
+        <div class="mt-12 flex flex-col gap-6 w-full max-w-xs">
+            <button id="playBtn" class="w-full bg-gradient-to-b from-green-400 to-green-600 hover:from-green-300 hover:to-green-500 text-white text-3xl py-4 px-8 rounded-2xl shadow-[0_6px_0_#14532d] hover:shadow-[0_4px_0_#14532d] hover:translate-y-1 transition-all active:shadow-none active:translate-y-2 border-2 border-green-300 font-bold tracking-widest">
+                PLAY
+            </button>
+            <button id="menuShopBtn" class="w-full bg-gradient-to-b from-purple-400 to-purple-600 hover:from-purple-300 hover:to-purple-500 text-white text-2xl py-4 px-8 rounded-2xl shadow-[0_6px_0_#3b0764] hover:shadow-[0_4px_0_#3b0764] hover:translate-y-1 transition-all active:shadow-none active:translate-y-2 border-2 border-purple-300 font-bold tracking-widest flex items-center justify-center gap-3">
+                SHOP
+            </button>
+        </div>
+    </div>
+
+    <div id="gameOverScreen" class="ui-layer interactive hidden bg-black/80 backdrop-blur-md">
+        <div class="glass-panel p-8 rounded-3xl border-4 border-white/20 flex flex-col items-center max-w-sm w-full mx-4">
+            <h2 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-b from-red-400 to-red-600 mb-6 drop-shadow-lg tracking-wide">GAME OVER</h2>
+            
+            <div class="w-full bg-black/50 rounded-2xl p-6 mb-6 flex flex-col gap-4 border border-white/10 shadow-inner">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400 text-xl font-sans font-bold tracking-wider">SCORE</span>
+                    <span class="text-white text-4xl font-bold" id="endScore">0</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400 text-xl font-sans font-bold tracking-wider">BEST</span>
+                    <span class="text-yellow-400 text-3xl font-bold" id="endBest">0</span>
+                </div>
+                <div class="h-px w-full bg-gradient-to-r from-transparent via-white/20 to-transparent my-2"></div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400 text-xl font-sans font-bold tracking-wider">COINS</span>
+                    <div class="flex items-center">
+                        <span class="text-yellow-400 text-3xl font-bold mr-2" id="endCoins">0</span>
+                        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border border-yellow-100 flex items-center justify-center shadow-sm">
+                            <span class="text-[12px] text-yellow-900 font-bold">$</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400 text-xl font-sans font-bold tracking-wider">STAGE</span>
+                    <span class="text-blue-400 text-2xl font-bold" id="endStage">1</span>
+                </div>
+            </div>
+
+            <div class="flex gap-4 w-full">
+                <button id="restartBtn" class="flex-1 bg-gradient-to-b from-green-400 to-green-600 hover:from-green-300 hover:to-green-500 text-white text-2xl py-3 rounded-2xl shadow-[0_5px_0_#14532d] hover:shadow-[0_3px_0_#14532d] hover:translate-y-[2px] transition-all active:shadow-none active:translate-y-[5px] border-2 border-green-300 font-bold">
+                    RETRY
+                </button>
+                <button id="overShopBtn" class="flex-1 bg-gradient-to-b from-purple-400 to-purple-600 hover:from-purple-300 hover:to-purple-500 text-white text-2xl py-3 rounded-2xl shadow-[0_5px_0_#3b0764] hover:shadow-[0_3px_0_#3b0764] hover:translate-y-[2px] transition-all active:shadow-none active:translate-y-[5px] border-2 border-purple-300 font-bold">
+                    SHOP
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="shopScreen" class="ui-layer interactive hidden bg-slate-900/95 backdrop-blur-xl pb-10">
+        <div class="w-full max-w-5xl h-full max-h-[90vh] flex flex-col px-4 pt-8">
+            <div class="flex justify-between items-center mb-8 bg-black/30 p-4 rounded-3xl border border-white/10 shadow-lg">
+                <h2 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-300 to-purple-400 drop-shadow-lg tracking-wider ml-4">EVOLUTION SHOP</h2>
+                <div class="flex items-center bg-black/60 rounded-full px-5 py-2 border-2 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.2)]">
+                    <span class="text-yellow-400 text-3xl font-bold mr-3" id="shopCoinDisplay">0</span>
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-2 border-yellow-100 flex items-center justify-center">
+                        <span class="text-sm text-yellow-900 font-extrabold">$</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="shopItemsContainer" class="flex-1 overflow-y-auto shop-scroll grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-6 pr-2">
+            </div>
+
+            <div class="mt-6 pt-6 border-t border-white/10 flex justify-center">
+                <button id="shopBackBtn" class="bg-gradient-to-b from-gray-500 to-gray-700 hover:from-gray-400 hover:to-gray-600 text-white text-2xl py-3 px-16 rounded-2xl shadow-[0_5px_0_#374151] hover:shadow-[0_3px_0_#374151] hover:translate-y-[2px] transition-all active:shadow-none active:translate-y-[5px] border-2 border-gray-400 font-bold tracking-wider">
+                    BACK
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// --- 1. SETUP & STATE ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const ui = {
+    hud: document.getElementById('hud'),
+    scoreDisplay: document.getElementById('scoreDisplay'),
+    coinDisplay: document.getElementById('coinDisplay'),
+    mainMenu: document.getElementById('mainMenu'),
+    gameOverScreen: document.getElementById('gameOverScreen'),
+    shopScreen: document.getElementById('shopScreen'),
+    stageAlertContainer: document.getElementById('stageAlertContainer'),
+    stageAlertText: document.getElementById('stageAlertText'),
+    shopCoinDisplay: document.getElementById('shopCoinDisplay'),
+    shopItemsContainer: document.getElementById('shopItemsContainer'),
+    endScore: document.getElementById('endScore'),
+    endBest: document.getElementById('endBest'),
+    endCoins: document.getElementById('endCoins'),
+    endStage: document.getElementById('endStage'),
+    playBtn: document.getElementById('playBtn'),
+    menuShopBtn: document.getElementById('menuShopBtn'),
+    restartBtn: document.getElementById('restartBtn'),
+    overShopBtn: document.getElementById('overShopBtn'),
+    shopBackBtn: document.getElementById('shopBackBtn')
+};
+
+let frames = 0;
+let currentState = 'menu';
+let previousState = 'menu';
+let score = 0;
+let bestScore = 0;
+let coins = 0; 
+let currentStage = 1;
+
+const baseGravity = 0.25;
+const baseJump = -5;
+const baseSpeed = 3;
+const baseGap = 160;
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let audioInitialized = false;
+
+const bgMusic = new Audio('nastelbom-background-513425.mp3');
+bgMusic.loop = true;
+bgMusic.volume = 0.4;
+
+const sfx = {
+    init: function() {
+        if (!audioInitialized) {
+            audioCtx.resume();
+            bgMusic.play().catch(e => console.warn("BGM autoplay prevented:", e));
+            audioInitialized = true;
+        }
+    },
+    playTone: function(freq, type, duration, vol=0.1, slideFreq=null) {
+        if (audioCtx.state === 'suspended') return;
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.type = type; 
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        if (slideFreq) {
+            osc.frequency.exponentialRampToValueAtTime(slideFreq, audioCtx.currentTime + duration);
+        }
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    },
+    jump: function() { this.playTone(300, 'sine', 0.15, 0.2, 600); },
+    coin: function() { 
+        this.playTone(800, 'sine', 0.1, 0.1); 
+        setTimeout(() => this.playTone(1200, 'sine', 0.15, 0.1), 50);
+    },
+    hit: function() { this.playTone(150, 'triangle', 0.3, 0.3, 50); },
+    levelUp: function() {
+        this.playTone(400, 'sine', 0.1, 0.1);
+        setTimeout(() => this.playTone(500, 'sine', 0.1, 0.1), 100);
+        setTimeout(() => this.playTone(600, 'sine', 0.2, 0.1), 200);
+        setTimeout(() => this.playTone(800, 'sine', 0.4, 0.15), 300);
+    },
+    buy: function() {
+        this.playTone(600, 'sine', 0.1, 0.1);
+        setTimeout(() => this.playTone(1000, 'sine', 0.2, 0.1), 100);
+    }
+};
+
+const skins = {
+    classic: { id: 'classic', name: 'Classic', cost: 0, unlocked: true, color: '#fbbf24', detail: '#d97706', light: '#fde68a', type: 'normal' },
+    ninja:   { id: 'ninja', name: 'Ninja', cost: 50, unlocked: false, color: '#1e293b', detail: '#ef4444', light: '#475569', type: 'ninja' },
+    dragon:  { id: 'dragon', name: 'Dragon', cost: 150, unlocked: false, color: '#064e3b', detail: '#f87171', light: '#10b981', type: 'dragon' },
+    steampunk: { id: 'steampunk', name: 'Steam Gear', cost: 350, unlocked: false, color: '#78350f', detail: '#fbbf24', light: '#b45309', type: 'steampunk' },
+    astronaut: { id: 'astronaut', name: 'Starfarer', cost: 750, unlocked: false, color: '#f8fafc', detail: '#38bdf8', light: '#ffffff', type: 'astronaut' },
+    phoenix: { id: 'phoenix', name: 'Phoenix', cost: 1500, unlocked: false, color: '#dc2626', detail: '#fbbf24', light: '#f97316', type: 'phoenix' },
+    void:    { id: 'void', name: 'Void Eye', cost: 3000, unlocked: false, color: '#0f172a', detail: '#c084fc', light: '#4c1d95', type: 'void' },
+    rainbow: { id: 'rainbow', name: 'Hypercube', cost: 10000, unlocked: false, color: '#ffffff', detail: '#000000', light: '#ffffff', type: 'rainbow' }
+};
+let equippedSkin = 'classic';
+
+let pipes = [];
+let gameCoins = [];
+let particles = [];
+let buildings = [];
+let stars = [];
+let planets = [];
+
+function initBackground() {
+    buildings = [];
+    let x = 0;
+    while(x < canvas.width * 2) {
+        let w = 80 + Math.random() * 100;
+        let h = 150 + Math.random() * 200;
+        buildings.push({ x, w, h, windows: generateWindows(w, h) });
+        x += w + 10;
+    }
+    
+    stars = [];
+    for(let i=0; i<150; i++) {
+        stars.push({
+            x: Math.random() * canvas.width * 2,
+            y: Math.random() * canvas.height,
+            size: 1 + Math.random() * 2,
+            opacity: 0.5 + Math.random() * 0.5
+        });
+    }
+
+    planets = [
+        { x: canvas.width * 0.8, y: canvas.height * 0.2, r: 60, color: '#ff9a9e' },
+        { x: canvas.width * 1.5, y: canvas.height * 0.6, r: 100, color: '#a18cd1' },
+        { x: canvas.width * 2.2, y: canvas.height * 0.3, r: 40, color: '#fad0c4' }
+    ];
+}
+
+function generateWindows(w, h) {
+    let wins = [];
+    for(let r=20; r<h-10; r+=25) {
+        for(let c=10; c<w-10; c+=15) {
+            if(Math.random() > 0.5) wins.push({x: c, y: r});
+        }
+    }
+    return wins;
+}
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    initBackground();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- 2. GAME ENTITIES ---
+const bird = {
+    x: 0,
+    y: 0,
+    radius: 20,
+    velocity: 0,
+    gravity: baseGravity,
+    jumpStrength: baseJump,
+    rotation: 0,
+    flapTimer: 0,
+    reset() {
+        this.x = canvas.width * 0.25;
+        this.y = canvas.height / 2;
+        this.velocity = 0;
+        this.rotation = 0;
+        this.gravity = baseGravity + (currentStage - 1) * 0.02;
+        this.jumpStrength = baseJump - (currentStage - 1) * 0.15;
+    },
+    update() {
+        if (currentState !== 'gameover') {
+            this.velocity += this.gravity;
+            this.y += this.velocity;
+            
+            if (this.velocity >= this.jumpStrength) {
+                this.rotation = Math.min(Math.PI / 4, this.rotation + 0.08);
+            } else {
+                this.rotation = -Math.PI / 6;
+            }
+            this.flapTimer += this.velocity < 0 ? 0.6 : 0.15;
+            
+            // Special Skin Effects
+            if (skins[equippedSkin].type === 'phoenix' && frames % 2 === 0) {
+                createParticles(this.x - 15, this.y + (Math.random()-0.5)*10, 1, '#f97316');
+            }
+            if (skins[equippedSkin].type === 'void' && frames % 3 === 0) {
+                createParticles(this.x, this.y, 1, '#a855f7');
+            }
+
+            if (this.y + this.radius >= canvas.height || this.y - this.radius <= 0) {
+                gameOver();
+            }
+            if(skins[equippedSkin].type === 'rainbow') {
+                this.hue = (frames * 5) % 360;
+            }
+        }
+    },
+    jump() {
+        if (currentState !== 'playing') return;
+        this.velocity = this.jumpStrength;
+        this.rotation = -Math.PI / 6;
+        sfx.jump();
+        createParticles(this.x, this.y + this.radius, 5, skins[equippedSkin].color);
+    },
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        drawBirdEntity(ctx, skins[equippedSkin], this.radius, this.flapTimer, this.hue);
+        ctx.restore();
+    }
+};
+
+/**
+ * Advanced Drawing Logic: Teardrop shape, tail feathers, rim lighting
+ */
+function drawBirdEntity(ctx, skin, radius, flapTimer, hue) {
+    let mainColor = skin.color;
+    let lightColor = skin.light;
+    
+    if (skin.type === 'rainbow') {
+        mainColor = `hsl(${hue || 0}, 100%, 50%)`;
+        lightColor = `hsl(${hue || 0}, 100%, 80%)`;
+    } else if (skin.type === 'transparent') {
+        ctx.globalAlpha = 0.7;
+    }
+
+    // Advanced Glow Settings
+    if (['phoenix', 'void', 'rainbow', 'astronaut'].includes(skin.id)) {
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = skin.detail;
+    }
+
+    // 1. Tail Feathers (Dynamic)
+    const tailY = Math.sin(flapTimer * 0.8) * 3;
+    ctx.fillStyle = skin.detail;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    
+    if (skin.type === 'phoenix') {
+        // Fire plumes for tail
+        for (let i = 0; i < 3; i++) {
+            ctx.save();
+            ctx.translate(-radius, (i-1)*6 + tailY);
+            ctx.rotate(Math.PI + (i-1)*0.3);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, radius*0.8, radius*0.2, 0, 0, Math.PI*2);
+            ctx.fillStyle = i % 2 === 0 ? '#fbbf24' : '#ef4444';
+            ctx.fill();
+            ctx.restore();
+        }
+    } else {
+        // Standard tail feathers
+        for (let i = 0; i < 3; i++) {
+            ctx.save();
+            ctx.translate(-radius*0.8, (i-1)*5 + tailY);
+            ctx.rotate(Math.PI + (i-1)*0.4);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, radius*0.5, radius*0.15, 0, 0, Math.PI*2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    // 2. Body Shape (Elongated Teardrop/Ellipse)
+    ctx.save();
+    const bodyW = radius * 1.15;
+    const bodyH = radius;
+
+    // Rim Lighting Gradient (Inner Glow)
+    const rimGrad = ctx.createLinearGradient(-bodyW, -bodyH, bodyW, bodyH);
+    rimGrad.addColorStop(0, 'rgba(255,255,255,0.4)');
+    rimGrad.addColorStop(0.5, 'rgba(255,255,255,0)');
+    rimGrad.addColorStop(1, 'rgba(0,0,0,0.2)');
+
+    // Main Body Gradient
+    const mainGrad = ctx.createRadialGradient(-bodyW/4, -bodyH/4, bodyW/10, 0, 0, bodyW);
+    
+    if (skin.type === 'void') {
+        // Starfield inside body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bodyW, bodyH, 0, 0, Math.PI*2);
+        ctx.fillStyle = '#0f172a';
+        ctx.fill();
+        // Moving stars
+        for(let i=0; i<8; i++) {
+            const sx = ((frames * (1+i/10)) + i*20) % (bodyW*2) - bodyW;
+            const sy = (i*15) % (bodyH*2) - bodyH;
+            if (Math.abs(sx) < bodyW*0.8 && Math.abs(sy) < bodyH*0.8) {
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.beginPath(); ctx.arc(sx, sy, 1.5, 0, Math.PI*2); ctx.fill();
+            }
+        }
+    } else {
+        mainGrad.addColorStop(0, lightColor);
+        mainGrad.addColorStop(1, mainColor);
+        ctx.fillStyle = mainGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bodyW, bodyH, 0, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    // Rim Light Layer
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.fillStyle = rimGrad;
+    ctx.fillRect(-bodyW, -bodyH, bodyW*2, bodyH*2);
+    ctx.globalCompositeOperation = 'source-over';
+
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Eye System (Expressive)
+    const eyeX = radius * 0.55;
+    const eyeY = -radius * 0.35;
+    const eyeR = radius * 0.42;
+
+    // Eyeball
+    ctx.beginPath();
+    ctx.arc(eyeX, eyeY, eyeR, 0, Math.PI * 2);
+    ctx.fillStyle = 'white';
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    // Pupil
+    ctx.beginPath();
+    if (skin.type === 'dragon') {
+        ctx.fillStyle = '#ef4444'; // Glowing red slit
+        ctx.ellipse(eyeX + 3, eyeY, eyeR * 0.15, eyeR * 0.85, 0, 0, Math.PI * 2);
+    } else if (skin.type === 'void') {
+        ctx.fillStyle = '#a855f7';
+        ctx.arc(eyeX + 3, eyeY, eyeR * 0.6, 0, Math.PI * 2);
+    } else {
+        ctx.fillStyle = '#0f172a';
+        ctx.arc(eyeX + 3, eyeY, eyeR * 0.55, 0, Math.PI * 2);
+    }
+    ctx.fill();
+
+    // Highlights
+    ctx.fillStyle = 'white';
+    ctx.beginPath(); ctx.arc(eyeX + 5, eyeY - 3, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(eyeX + 1, eyeY + 2, 1.5, 0, Math.PI*2); ctx.fill();
+
+    // 4. Wing System (Organic)
+    const wingY = Math.sin(flapTimer) * (radius * 0.4);
+    ctx.save();
+    ctx.translate(-radius*0.2, radius*0.2 + wingY);
+    
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radius * 0.7, radius * 0.45, Math.PI / 8 + (wingY * 0.06), 0, Math.PI * 2);
+    ctx.fillStyle = skin.detail;
+    if (skin.type === 'steampunk') {
+        // Gear/Mechanical Wing
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        for(let i=0; i<6; i++) {
+            ctx.moveTo(0,0);
+            ctx.lineTo(Math.cos(i)*10, Math.sin(i)*10);
+        }
+        ctx.stroke();
+    } else {
+        ctx.fill();
+        ctx.stroke();
+    }
+    ctx.restore();
+
+    // 5. Beak (Sharp & Gradient)
+    ctx.beginPath();
+    const beakBase = radius * 0.9;
+    ctx.moveTo(beakBase - 3, 0);
+    ctx.lineTo(beakBase + radius * 0.75, radius * 0.1);
+    ctx.lineTo(beakBase - 3, radius * 0.45);
+    ctx.closePath();
+    
+    const beakGrad = ctx.createLinearGradient(beakBase, 0, beakBase + 15, 15);
+    beakGrad.addColorStop(0, skin.type === 'ninja' ? '#334155' : '#fbbf24');
+    beakGrad.addColorStop(1, skin.type === 'ninja' ? '#020617' : '#ea580c');
+    ctx.fillStyle = beakGrad;
+    ctx.fill();
+    ctx.stroke();
+
+    // 6. Accessories
+    ctx.shadowBlur = 0;
+    if (skin.type === 'ninja') {
+        // Red Headband
+        ctx.beginPath();
+        ctx.moveTo(-radius, -radius*0.6);
+        ctx.lineTo(radius*0.6, -radius*0.2);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#ef4444';
+        ctx.stroke();
+        // Ties
+        ctx.moveTo(-radius, -radius*0.6);
+        ctx.lineTo(-radius*1.5, -radius*0.8 + Math.sin(frames*0.1)*5);
+        ctx.stroke();
+    } else if (skin.type === 'steampunk') {
+        // Brass Goggle
+        ctx.beginPath();
+        ctx.arc(eyeX, eyeY, eyeR + 3, 0, Math.PI*2);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#d97706';
+        ctx.stroke();
+    } else if (skin.type === 'astronaut') {
+        // Blue Visor Reflection
+        ctx.beginPath();
+        ctx.arc(eyeX + 3, eyeY, eyeR + 5, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.stroke();
+    } else if (skin.type === 'dragon') {
+        // Spines
+        for(let i=0; i<3; i++) {
+            ctx.beginPath();
+            ctx.moveTo(-radius + i*8, -radius*0.8);
+            ctx.lineTo(-radius + i*8 - 5, -radius*1.2);
+            ctx.lineTo(-radius + i*8 + 5, -radius*0.8);
+            ctx.fillStyle = '#064e3b';
+            ctx.fill();
+            ctx.stroke();
+        }
+    }
+}
+
+// --- 3. ENVIRONMENT & OBSTACLES ---
+function getStageParams() {
+    const speed = baseSpeed + (currentStage - 1) * 0.5;
+    const gap = Math.max(90, baseGap - (currentStage - 1) * 8);
+    const bgs = [
+        { sky: ['#4facfe', '#00f2fe'], theme: 'city' }, 
+        { sky: ['#ff7e5f', '#feb47b'], theme: 'city' }, 
+        { sky: ['#2b5876', '#4e4376'], theme: 'space' },
+        { sky: ['#141e30', '#243b55'], theme: 'space' },
+        { sky: ['#000000', '#23074d'], theme: 'space' },
+        { sky: ['#0f0c29', '#302b63'], theme: 'space' }
+    ];
+    const bg = bgs[Math.min(currentStage - 1, bgs.length - 1)];
+    const pipeColors = [
+        { main: '#4ade80', dark: '#166534' },
+        { main: '#fb923c', dark: '#9a3412' },
+        { main: '#c084fc', dark: '#6b21a8' },
+        { main: '#60a5fa', dark: '#1e3a8a' },
+        { main: '#f43f5e', dark: '#881337' },
+        { main: '#eab308', dark: '#713f12' },
+    ];
+    const pipeColor = pipeColors[Math.min(currentStage - 1, pipeColors.length - 1)];
+    return { speed, gap, bg: bg.sky, theme: bg.theme, pipeColor };
+}
+
+function spawnPipe() {
+    const params = getStageParams();
+    const minHeight = 50;
+    const maxHeight = canvas.height - params.gap - minHeight;
+    const topHeight = Math.random() * (maxHeight - minHeight) + minHeight;
+    pipes.push({
+        x: canvas.width,
+        w: 60,
+        top: topHeight,
+        bottom: topHeight + params.gap,
+        passed: false,
+        stage: currentStage
+    });
+    if (Math.random() < 0.4) {
+        gameCoins.push({
+            x: canvas.width + 30,
+            y: topHeight + params.gap / 2,
+            radius: 12,
+            collected: false
+        });
+    }
+}
+
+function updateAndDrawEnvironment() {
+    const params = getStageParams();
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    bgGrad.addColorStop(0, params.bg[0]);
+    bgGrad.addColorStop(1, params.bg[1]);
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const parallaxSpeed = params.speed * 0.2;
+
+    if(params.theme === 'space') {
+        stars.forEach(s => {
+            s.x -= parallaxSpeed * 0.5;
+            if(s.x < -10) s.x = canvas.width + 10;
+            ctx.fillStyle = `rgba(255,255,255,${s.opacity})`;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.size, 0, Math.PI*2);
+            ctx.fill();
+        });
+        planets.forEach(p => {
+            p.x -= parallaxSpeed;
+            if(p.x < -p.r * 2) p.x = canvas.width * 2;
+            const pGrad = ctx.createRadialGradient(p.x - p.r/3, p.y - p.r/3, p.r/4, p.x, p.y, p.r);
+            pGrad.addColorStop(0, p.color);
+            pGrad.addColorStop(1, '#000000');
+            ctx.fillStyle = pGrad;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+            ctx.fill();
+        });
+    } else {
+        buildings.forEach(b => {
+            b.x -= parallaxSpeed;
+            if(b.x + b.w < 0) b.x = canvas.width * 2;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+            ctx.fillRect(b.x, canvas.height - b.h, b.w, b.h);
+            ctx.fillStyle = 'rgba(250, 204, 21, 0.5)';
+            b.windows.forEach(w => {
+                ctx.fillRect(b.x + w.x, canvas.height - b.h + w.y, 8, 12);
+            });
+        });
+    }
+
+    for (let i = 0; i < pipes.length; i++) {
+        let p = pipes[i];
+        p.x -= params.speed;
+        const pColor = getStageParams(p.stage).pipeColor;
+        ctx.fillStyle = pColor.main;
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.fillRect(p.x, 0, p.w, p.top);
+        ctx.strokeRect(p.x, 0, p.w, p.top);
+        ctx.fillRect(p.x - 4, p.top - 20, p.w + 8, 20);
+        ctx.strokeRect(p.x - 4, p.top - 20, p.w + 8, 20);
+        const bottomH = canvas.height - p.bottom;
+        ctx.fillRect(p.x, p.bottom, p.w, bottomH);
+        ctx.strokeRect(p.x, p.bottom, p.w, bottomH);
+        ctx.fillRect(p.x - 4, p.bottom, p.w + 8, 20);
+        ctx.strokeRect(p.x - 4, p.bottom, p.w + 8, 20);
+
+        if (currentState === 'playing') {
+            if (bird.x + bird.radius > p.x && bird.x - bird.radius < p.x + p.w && (bird.y - bird.radius < p.top || bird.y + bird.radius > p.bottom)) {
+                gameOver();
+            }
+            if (p.x + p.w < bird.x && !p.passed) {
+                score++;
+                p.passed = true;
+                ui.scoreDisplay.innerText = score;
+                if (score > 0 && score % 10 === 0) levelUpStage();
+            }
+        }
+    }
+
+    for (let i = 0; i < gameCoins.length; i++) {
+        let c = gameCoins[i];
+        if (c.collected) continue;
+        c.x -= params.speed;
+        let yOffset = Math.sin((frames + i * 10) * 0.1) * 5;
+        ctx.save();
+        ctx.translate(c.x, c.y + yOffset);
+        ctx.scale(Math.sin(frames * 0.1), 1);
+        ctx.beginPath();
+        ctx.arc(0, 0, c.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#b45309';
+        ctx.stroke();
+        ctx.restore();
+        
+        if (currentState === 'playing') {
+            let dx = bird.x - c.x;
+            let dy = bird.y - (c.y + yOffset);
+            if (Math.sqrt(dx*dx + dy*dy) < bird.radius + c.radius) {
+                c.collected = true;
+                coins++;
+                ui.coinDisplay.innerText = coins;
+                sfx.coin();
+                createParticles(c.x, c.y, 10, '#fbbf24');
+            }
+        }
+    }
+    pipes = pipes.filter(p => p.x + p.w > -10);
+    gameCoins = gameCoins.filter(c => c.x + c.radius > -10 && !c.collected);
+    if (pipes.length === 0 || canvas.width - pipes[pipes.length - 1].x >= 250 + (params.speed * 10)) {
+        spawnPipe();
+    }
+}
+
+function createParticles(x, y, count, color) {
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x, y, vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5,
+            life: 1, color
+        });
+    }
+}
+
+function updateAndDrawParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.life -= 0.05;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+function levelUpStage() {
+    currentStage++;
+    sfx.levelUp();
+    ui.stageAlertText.innerText = `STAGE ${currentStage}`;
+    ui.stageAlertText.classList.remove('stage-alert');
+    ui.stageAlertContainer.classList.remove('hidden');
+    void ui.stageAlertText.offsetWidth; 
+    ui.stageAlertText.classList.add('stage-alert');
+    createParticles(bird.x, bird.y, 30, '#ffffff');
+    setTimeout(() => { ui.stageAlertContainer.classList.add('hidden'); }, 2000);
+}
+
+function resetGame() {
+    bird.reset();
+    pipes = []; gameCoins = []; particles = [];
+    score = 0; currentStage = 1; frames = 0;
+    ui.scoreDisplay.innerText = score;
+    ui.coinDisplay.innerText = coins;
+}
+
+function startGame() {
+    currentState = 'playing';
+    sfx.init();
+    resetGame();
+    ui.mainMenu.classList.add('hidden');
+    ui.gameOverScreen.classList.add('hidden');
+    ui.shopScreen.classList.add('hidden');
+    ui.hud.classList.remove('hidden');
+}
+
+function gameOver() {
+    if (currentState === 'gameover') return;
+    currentState = 'gameover';
+    sfx.hit();
+    createParticles(bird.x, bird.y, 50, skins[equippedSkin].color);
+    if (score > bestScore) bestScore = score;
+    ui.hud.classList.add('hidden');
+    ui.gameOverScreen.classList.remove('hidden');
+    ui.endScore.innerText = score;
+    ui.endBest.innerText = bestScore;
+    ui.endCoins.innerText = coins;
+    ui.endStage.innerText = currentStage;
+}
+
+function openShop(fromState) {
+    previousState = fromState;
+    currentState = 'shop';
+    sfx.init();
+    ui.mainMenu.classList.add('hidden');
+    ui.gameOverScreen.classList.add('hidden');
+    ui.hud.classList.add('hidden');
+    ui.shopScreen.classList.remove('hidden');
+    ui.shopCoinDisplay.innerText = coins;
+    renderShop();
+}
+
+function closeShop() {
+    ui.shopScreen.classList.add('hidden');
+    if (previousState === 'menu') {
+        currentState = 'menu';
+        ui.mainMenu.classList.remove('hidden');
+    } else {
+        currentState = 'gameover';
+        ui.gameOverScreen.classList.remove('hidden');
+    }
+}
+
+function buySkin(skinId) {
+    const skin = skins[skinId];
+    if (!skin.unlocked && coins >= skin.cost) {
+        coins -= skin.cost;
+        skin.unlocked = true;
+        equippedSkin = skinId;
+        sfx.buy();
+        ui.shopCoinDisplay.innerText = coins;
+        renderShop();
+        createParticles(canvas.width/2, canvas.height/2, 50, skin.color);
+    }
+}
+
+function equipSkin(skinId) {
+    if (skins[skinId].unlocked) {
+        equippedSkin = skinId;
+        sfx.jump();
+        renderShop();
+    }
+}
+
+function renderShop() {
+    ui.shopItemsContainer.innerHTML = '';
+    Object.values(skins).forEach(skin => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = `glass-panel rounded-3xl p-6 border-2 flex flex-col items-center justify-between transition-all duration-300 ${equippedSkin === skin.id ? 'border-green-400 scale-[1.05] shadow-[0_0_20px_rgba(74,222,128,0.4)]' : 'border-white/10 hover:bg-white/5 hover:scale-[1.02]'}`;
+        const previewCanvas = document.createElement('canvas');
+        previewCanvas.width = 140; previewCanvas.height = 140;
+        
+        const pCtx = previewCanvas.getContext('2d');
+        pCtx.save();
+        pCtx.translate(70, 70);
+        drawBirdEntity(pCtx, skin, 30, 0, (frames * 5) % 360);
+        pCtx.restore();
+
+        const title = document.createElement('h3');
+        title.className = `text-2xl mt-4 font-bold tracking-wide ${equippedSkin === skin.id ? 'text-green-400' : 'text-white'}`;
+        title.innerText = skin.name;
+        
+        const actionDiv = document.createElement('div');
+        actionDiv.className = 'mt-5 w-full';
+        
+        if (skin.unlocked) {
+            if (equippedSkin === skin.id) {
+                actionDiv.innerHTML = `<button disabled class="w-full bg-green-900/40 text-green-400 font-bold py-3 rounded-2xl border-2 border-green-700/50 cursor-default">EQUIPPED</button>`;
+            } else {
+                const eqBtn = document.createElement('button');
+                eqBtn.className = 'w-full bg-gradient-to-b from-blue-400 to-blue-600 text-white font-bold py-3 rounded-2xl border-b-4 border-blue-700 transition-all shadow-md';
+                eqBtn.innerText = 'EQUIP';
+                eqBtn.onclick = () => equipSkin(skin.id);
+                actionDiv.appendChild(eqBtn);
+            }
+        } else {
+            const buyBtn = document.createElement('button');
+            const canAfford = coins >= skin.cost;
+            buyBtn.className = `w-full flex justify-center items-center gap-2 font-bold py-3 rounded-2xl border-b-4 transition-all shadow-md ${canAfford ? 'bg-gradient-to-b from-yellow-400 to-yellow-600 text-yellow-900 border-yellow-700' : 'bg-gray-700 text-gray-400 border-gray-800 cursor-not-allowed opacity-70'}`;
+            buyBtn.innerHTML = `<span class="text-lg">BUY</span> <span class="bg-black/40 px-3 py-1 rounded-full flex items-center"><span class="text-xs mr-1">$</span>${skin.cost}</span>`;
+            if (canAfford) buyBtn.onclick = () => buySkin(skin.id);
+            actionDiv.appendChild(buyBtn);
+        }
+        itemDiv.appendChild(previewCanvas);
+        itemDiv.appendChild(title);
+        itemDiv.appendChild(actionDiv);
+        ui.shopItemsContainer.appendChild(itemDiv);
+    });
+}
+
+function handleInput(e) {
+    if (e.type === 'keydown' && e.code !== 'Space') return;
+    if (e.type === 'keydown' && e.code === 'Space') e.preventDefault();
+    sfx.init();
+    if (e.target.tagName === 'BUTTON') return;
+    if (currentState === 'playing') bird.jump();
+}
+
+window.addEventListener('keydown', handleInput);
+window.addEventListener('mousedown', handleInput);
+window.addEventListener('touchstart', (e) => { if (e.target.tagName !== 'BUTTON') handleInput(e); }, {passive: false});
+ui.playBtn.addEventListener('click', startGame);
+ui.restartBtn.addEventListener('click', startGame);
+ui.menuShopBtn.addEventListener('click', () => openShop('menu'));
+ui.overShopBtn.addEventListener('click', () => openShop('gameover'));
+ui.shopBackBtn.addEventListener('click', closeShop);
+
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (currentState === 'playing') {
+        updateAndDrawEnvironment();
+        updateAndDrawParticles();
+        bird.update();
+        bird.draw();
+        frames++;
+    } else if (currentState === 'gameover') {
+        updateAndDrawEnvironment();
+        updateAndDrawParticles();
+        bird.draw();
+        frames++;
+    } else if (currentState === 'menu') {
+        updateAndDrawEnvironment();
+        bird.reset();
+        bird.x = canvas.width / 2;
+        bird.y = (canvas.height / 2) - 100 + Math.sin(frames * 0.05) * 20;
+        if(skins[equippedSkin].type === 'rainbow') bird.hue = (frames * 5) % 360;
+        bird.draw();
+        frames++;
+    }
+    requestAnimationFrame(gameLoop);
+}
+bird.reset();
+gameLoop();
+</script>
+</body>
+</html>
